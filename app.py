@@ -2,6 +2,7 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
+import plotly.express as px
 from collections import Counter
 
 # Load and prepare our data
@@ -48,7 +49,7 @@ all_tags = sorted(set(tag for tag_list in df["tags"] for tag in tag_list if isin
 
 df_exploded = df_filtered.explode("tags")
 
-tab1, tab2, tab3 = st.tabs(["Skill Trends", "Company Insights", "Raw Listings"])
+tab1, tab2, tab3, tab4 = st.tabs(["Skill Trends", "Company Insights", "Raw Listings", "Job Title Trends"])
 
 # Creates our first tab to be able to compare in demand skills
 with tab1:
@@ -66,6 +67,7 @@ with tab1:
 
         # Create the bar chart
         fig, ax = plt.subplots()
+        fig.tight_layout()
         skill_counts.plot(kind = 'bar', ax = ax, color = 'mediumseagreen')
         ax.set_title("Selected Skill Demand")
         ax.set_xlabel("Skill")
@@ -77,33 +79,44 @@ with tab1:
     else: 
         st.info("Select one or more skills from the list to compare trends")
 
-
-
 with tab2:
     st.subheader("Top Hiring Companies")
 
     # Document the top value counts of the top 10 companies
     top_companies = df_filtered['company'].value_counts().head(10)
 
-    # Charts the companies AS LONG AS top_companies is not empty
-    if not top_companies.empty:
-        fig, ax = plt.subplots()
-        top_companies.plot(kind = 'barh', ax = ax, color = 'skyblue')
-        ax.set_title('Top Hiring Companies')
-        ax.set_xlabel("Number of Job Listings")
-        ax.set_ylabel("Company")
-        ax.invert_yaxis()
-        st.pyplot(fig)
+    st.markdown("### Pie Chart of Job Share by Top Companies")
 
-    # Print this if top companies is empty
-    else:
-        st.info("No companu data available in the selected date range.")
+    company_list = top_companies.index.tolist()
+    company_filtered = df_filtered[df_filtered["company"].isin(company_list)]
 
-    st.markdown("---")
+    # Group by date and company
+    company_trends = company_filtered.groupby([df_filtered["date"].dt.to_period('M'), "company"]).size().unstack().fillna(0)
 
-    # Create a list of company options with no dupes and dropping empty values 
+    # Time to plot :]
+    fig, ax = plt.subplots(figsize = (15,11))
+    ax.tick_params(labelsize = 8)
+    ax.pie(top_companies.values, labels = top_companies.index, autopct = '%1.1f%%', startangle = 90)
+    ax.axis("equal")
+    ax.set_ylabel('')
+    ax.set_title("Share of Job Postings by Top Companies")
+    st.pyplot(fig)
 
+    selected_comapny = st.selectbox("Select a company for more details", company_list)
 
+    company_data = df_filtered[df_filtered["company"] == selected_comapny]
+    st.metric("Job Postings", len(company_data))
+    top_skill = df_exploded[df_exploded["company"] == selected_comapny]["tags"].mode().iloc[0]
+    st.metric("Top Tag", top_skill)
+
+    # Fix the out of bounds error using is not statement
+    top_location = (
+        company_data["location"].mode().iloc[0]
+        if not company_data['location'].mode().empty
+        else "N/A"
+    )
+
+    st.metric("Top Location", top_location)
 
 with tab3:
     st.subheader("Job Listings & Download")
@@ -126,3 +139,30 @@ with tab3:
     file_name = "filtered_jobs.csv",
     mime = "text/csv"
     )
+
+with tab4:
+    st.subheader("Job Title Trends")
+
+    keyword = st.text_input("Filter job titles by keyword (optional):", "")
+
+    # We finna get da keywords ofn nga
+    title_series = df_filtered["position"].dropna()
+    if keyword:
+        title_series = title_series[title_series.str.contains(keyword, case = False)]
+
+    # Get top 10 job titles
+    top_titles = title_series.value_counts().head(10)
+
+    if not top_titles.empty:
+        fig, ax = plt.subplots(figsize = (6,3))
+        top_titles.plot(kind = 'barh', ax = ax, color = "orchid")
+        ax.set_title("Top Job Titles")
+        ax.set_xlabel("Count")
+        ax.set_ylabel("Job Title")
+        ax.invert_yaxis()
+        fig.tight_layout()
+        st.pyplot(fig)
+    
+    else:
+        st.info("No job titles found for that keyword.")
+
