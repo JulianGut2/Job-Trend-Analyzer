@@ -25,3 +25,5 @@ A Python project that scrapes real-time job postings from RemoteOK using their p
 - Visualizes hiring activity over time
 
 - Tracks skill trends by date
+
+- Simple UI for users of all skill levels
